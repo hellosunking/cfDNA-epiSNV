@@ -1,5 +1,4 @@
 # Codes and scripts used in Zhang and An et al. manuscript
-
 Distributed under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/ "CC BY-NC-ND") license for **personal and academic usage only**.
 
 The following softwares are used:
@@ -14,7 +13,7 @@ The following softwares are used:
 - [tabix v1.17](http://www.htslib.org/doc/1.17/tabix.html)
 - [bedtools v2.29.2](https://github.com/arq5x/bedtools2/releases/tag/v2.29.2)
 
-To run the analysis, you need to clone repo to get all the programs and files:
+To run the analysis, you need to clone this repo to obtain all the programs and related files:
 ```
 git clone https://github.com/hellosunking/cfDNA-epiSNV.git
 ## you will see a newly created directory named "cfDNA-epiSNV", go into it for following analysis
