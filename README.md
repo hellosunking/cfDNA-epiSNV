@@ -25,7 +25,7 @@ We had deposited processed data (including variants, cfDNA reads, and large anno
 ```
 wget -O fragmentomics.of.variants.in.cfDNA.tar "https://zenodo.org/records/14849892/files/fragmentomics.of.variants.in.cfDNA.tar?download=1"
 tar xf fragmentomics.of.variants.in.cfDNA.tar
-wget -O suppl.tar "https://zenodo.org/records/14849892/files/suppl.tar?download=1"
+wget -O suppl.tar "https://zenodo.org/records/15541329/files/suppl.tar?download=1"
 tar xf suppl.tar
 ## you will see a newly created directory named "Processed.files" with all files stored inside.
 ```
