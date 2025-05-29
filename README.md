@@ -4,6 +4,7 @@ Distributed under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-
 The following softwares are used:
 - [ktrim v1.5.0](https://github.com/hellosunking/Ktrim/releases/tag/v1.5.0)
 - [bwa v0.7.17](https://github.com/lh3/bwa/releases/tag/v0.7.17)
+- [GATK v4.2.3.0](https://github.com/broadinstitute/gatk/releases/tag/4.2.3.0)
 - [picard v2.23.4](https://github.com/broadinstitute/picard/releases/tag/2.23.4)
 - [Msuite2 v2.1.0](https://github.com/hellosunking/Msuite2/releases/tag/v2.1.0)
 - [samtools v1.17](https://github.com/samtools/samtools/releases/tag/1.17)
@@ -24,10 +25,12 @@ We had deposited processed data (including variants, cfDNA reads, and large anno
 ```
 wget -O fragmentomics.of.variants.in.cfDNA.tar "https://zenodo.org/records/14849892/files/fragmentomics.of.variants.in.cfDNA.tar?download=1"
 tar xf fragmentomics.of.variants.in.cfDNA.tar
+wget -O suppl.tar "https://zenodo.org/records/14849892/files/suppl.tar?download=1"
+tar xf suppl.tar
 ## you will see a newly created directory named "Processed.files" with all files stored inside.
 ```
 
-## 1. Read alignment and call somatic variants
+## 1. Read alignment and call somatic variants in low-pass cfDNA data
 For whole genome sequencing data, we used the following commands to do read alignment and call somatic variants for each sample:
 ```
 ## Need to update sampleID and path to the FASTQ files
@@ -310,7 +313,7 @@ Rscript 2.fragmentomics_epigenetics/6.methylation/roc_methy.R 2.fragmentomics_ep
 ```
 
 ## 5. FreeSV and FreeSV-m models
-FreeSV model was built using genomic, fragmentomic and epigenetic features associated with somatic variants in Bie et al. cohort. We pooled the individual features calculated by above commands, and sorted them in "3.AI_model/FreeSV_data.txt" file. We used the following commands to build and evaluate the model:
+FreeSV model was built through integrating genomic, fragmentomic, and epigenetic features associated with somatic variants in Bie et al. cohort. We pooled the individual features calculated by above commands, and sorted them in "3.AI_model/FreeSV_data.txt" file. We used the following commands to build and evaluate the model:
 ```
 ## build model
 Rscript 3.AI_model/GBM_parallel.R 3.AI_model/FreeSV_data.txt FreeSV_test
@@ -406,4 +409,55 @@ echo -e "$sid\t$ccca_n\t$ccca_t" | perl -alne 'print join "\t", $F[0], $F[1], $F
 ctcc_n=$(grep -w "^CTCC" $sid.Wt.motif  | cut -f 3)
 ctcc_t=$(grep -w "^CTCC" $sid.Mut.motif | cut -f 3)
 echo -e "$sid\t$ctcc_n\t$ctcc_t" | perl -alne 'print join "\t", $F[0], $F[1], $F[2], $F[2]-$F[1]' > $sid.motif.ctcc
+```
+
+## 7. Call variants in high-depth white blood cell data
+We identified variants from white blood cell data, and extracted those minor alleles with 2-30% frequencies (i.e., significantly lower than 50% in germline SNPs) as arised from clonal hamatopoiesis:
+```
+## here we use the sample Ctrl_1 as an example
+## You need to uncompress the SRA file use fasterq-dump to get fastq files
+sid=Ctrl_1
+buffycoat_1=SRR10799887_1.fastq
+buffycoat_2=SRR10799887_2.fastq
+
+## extract and remove UMIs in this data
+perl 4.target-seq/process.UMI.pl $buffycoat_1 $buffycoat_2 $sid.buffycoat
+
+## preprocessing, read alignment, and remove duplicates in buffycoat data, same as Step 1
+## Need to build hg38 index for BWA first and replace the following path
+hg38index=/path/to/hg38.bwa.index
+FASTQ1=$sid.buffycoat.R1.fq
+FASTQ2=$sid.buffycoat.R2.fq
+
+ktrim -1 $FASTQ1 -2 $FASTQ2 -t 8 -o $sid.buffycoat.ktrim -k illumina
+bwa mem -t 16 -M -Y $hg38index $sid.buffycoat.ktrim.read1.fq $sid.buffycoat.ktrim.read2.fq | samtools view -b -@ 16 - | samtools sort -@ 16 -o $sid.buffycoat.sort.bam - 2> $sid.buffycoat.bwa.log
+java -Xmx16g -XX:ParallelGCThreads=16 -jar picard.jar MarkDuplicates REMOVE_DUPLICATES=true I=$sid.buffycoat.sort.bam O=$sid.buffycoat.mkdup.bam METRICS_FILE=$sid.buffycoat.mkdup.bam.mat TMP_DIR=tmp 2> $sid.buffycoat.mkdup.log
+
+## call variants using GATK, the annotation files for GATK are required
+## Need to update the path to hg38 genome file (FASTA format) 
+hg38fasta=/path/to/hg38.fa
+
+gatk BaseRecalibrator -R $hg38fasta -I $sid.buffycoat.mkdup.bam -O $sid.buffycoat.recal.table \
+	--known-sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
+	--known-sites 1000G_phase1.snps.high_confidence.hg38.vcf.gz \
+	--known-sites dbsnp_156.vcf.gz
+
+gatk ApplyBQSR -R $hg38fasta -I $sid.buffycoat.mkdup.bam -O $sid.buffycoat.recal.bam \
+	-bqsr-recal-file $sid.buffycoat.recal.table
+
+gatk HaplotypeCaller -R $hg38fasta -I $sid.buffycoat.recal.bam -O $sid.buffycoat.vcf.gz \
+	-ERC GVCF --dont-use-soft-clipped-bases true --min-base-quality-score 20 \
+	--read-filter MappingQualityReadFilter --minimum-mapping-quality 20
+
+gatk GenotypeGVCFs -R $hg38fasta -V $sid.buffycoat.vcf.gz \
+	-D dbsnp_156.vcf.gz -O $sid.buffycoat.HC.vcf.gz
+
+gatk SelectVariants -V $sid.buffycoat.HC.vcf.gz -select-type SNP -O $sid.buffycoat.SNP.vcf.gz
+
+## filter variants, keep those with minor alleles ranging between 2% and 30%
+## the processed files in vcf format are under Processed.files/5.Target-seq/ directory.
+perl 4.target-seq/filt_vcf_buffycoat.pl $sid.buffycoat.SNP.vcf.gz $sid.CH.vcf.gz
+
+## extract cfDNA covering variants and calculate fragmentomics are the same as Step 3-4
+## Reads covering major alleles are "Wt-DNA" while reads covering minor alleles are "Mut-DNA"
 ```
