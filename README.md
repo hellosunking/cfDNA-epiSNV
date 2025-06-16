@@ -1,5 +1,5 @@
-# Codes and scripts used in Zhang and An et al. manuscript
-Distributed under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/ "CC BY-NC-ND") license for **personal and academic usage only**.
+## Codes and scripts used in Zhang and An et al. manuscript
+Distributed under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/ "CC BY-NC-ND") license and for **personal and academic usage only**.
 
 The following softwares are used:
 - [ktrim v1.5.0](https://github.com/hellosunking/Ktrim/releases/tag/v1.5.0)
@@ -25,19 +25,19 @@ We had deposited processed data (including variants, cfDNA reads, and large anno
 ```
 wget -O fragmentomics.of.variants.in.cfDNA.tar "https://zenodo.org/records/14849892/files/fragmentomics.of.variants.in.cfDNA.tar?download=1"
 tar xf fragmentomics.of.variants.in.cfDNA.tar
-wget -O suppl.tar "https://zenodo.org/records/15541329/files/suppl.tar?download=1"
-tar xf suppl.tar
+wget -O suppl.tar "https://zenodo.org/records/XXXXXXXXXX/files/suppl.CH.tar?download=1"
+tar xf suppl.CH.tar
 ## you will see a newly created directory named "Processed.files" with all files stored inside.
 ```
 
-## 1. Read alignment and call somatic variants in low-pass cfDNA data
-For whole genome sequencing data, we used the following commands to do read alignment and call somatic variants for each sample:
+## 1. Read preprocessing and alignment
 ```
 ## Need to update sampleID and path to the FASTQ files
 sid=SampleID
 FASTQ1=/path/to/$sid.R1.fq.gz
 FASTQ2=/path/to/$sid.R2.fq.gz
 
+#### For plain DNA-seq data
 ## data preprocess. Note that all the WGS data we analyzed are generated using MGI sequencers
 ktrim -1 $FASTQ1 -2 $FASTQ2 -t 8 -o $sid.ktrim -k BGI
 
@@ -48,28 +48,134 @@ bwa mem -t 16 -M -Y $hg38index $sid.ktrim.read1.fq $sid.ktrim.read2.fq | samtool
 ## remove duplicates
 java -Xmx16g -XX:ParallelGCThreads=8 -jar picard.jar MarkDuplicates REMOVE_DUPLICATES=true I=$sid.sort.bam O=$sid.mkdup.bam METRICS_FILE=$sid.mkdup.bam.mat TMP_DIR=tmp 2> $sid.mkdup.log
 
-## call variants. Need to update the path to hg38 genome file (FASTA format)
-hg38fasta=/path/to/hg38.fa
-samtools view -@ 4 -h $sid.mkdup.bam | perl -alne 'print and next if /^@/; next if $F[1] & 0x100 || $F[2] eq "*"; print if ($F[1] & 0x02) && ($F[6] eq "=")' | samtools view -b -@ 16 -o $sid.filter.bam
-samtools index -@ 16 $sid.filter.bam
-bcftools mpileup -q 60 -Q 30 -Ov -f $hg38fasta --threads 16 $sid.filter.bam | bcftools call -vc -V indels -Oz --threads 16 -o $sid.vcf.gz
-```
-
-For EM-seq data, we used the following commands to do read alignment and call somatic variants:
-```
-## Need to update sampleID and path to the FASTQ files
-sid=SampleID
-FASTQ1=/path/to/$sid.R1.fq.gz
-FASTQ2=/path/to/$sid.R2.fq.gz
-
+#### For EM-seq data
 ## Run Msuite2. Need to build hg38 index for Msuite2 first. The data is sequenced on illumina sequencers
 msuite2 -x hg38 -1 $FASTQ1 -2 $FASTQ2 -o Msuite2.$sid -k illumina --cut-r1-tail 25 --cut-r2-head 25 --aligner hisat2 -p 16
 cd Msuite2.$sid
 make
 make clean
 cd ../
+```
 
-## call variant
+## 2. Identification of CH- and tumor-derived somatic variants in paired PBMC and tumor genotyping data
+```
+## preprocess data, read alignment and BQSR are the same as Step 1
+sid=BRCA
+## assumes that you have already get  $sid.PBMC.mkdup.bam and $sid.tumor.mkdup.bam
+
+## BQSR using GATK
+## Need to update the path to hg38 genome file (FASTA format) 
+hg38fasta=/path/to/hg38.fa
+
+gatk BaseRecalibrator -R $hg38fasta -I $sid.PBMC.mkdup.bam -O $sid.PBMC.recal.table \
+	--known-sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
+	--known-sites 1000G_phase1.snps.high_confidence.hg38.vcf.gz \
+	--known-sites dbsnp_156.vcf.gz
+gatk ApplyBQSR -R $hg38fasta -I $sid.PBMC.mkdup.bam -O $sid.PBMC.recal.bam \
+	-bqsr-recal-file $sid.PBMC.recal.table
+
+gatk BaseRecalibrator -R $hg38fasta -I $sid.tumor.mkdup.bam -O $sid.tumor.recal.table \
+	--known-sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
+	--known-sites 1000G_phase1.snps.high_confidence.hg38.vcf.gz \
+	--known-sites dbsnp_156.vcf.gz
+gatk ApplyBQSR -R $hg38fasta -I $sid.tumor.mkdup.bam -O $sid.tumor.recal.bam \
+	-bqsr-recal-file $sid.tumor.recal.table
+
+## call variants using GATK mutect2
+gatk Mutect2 -R $hg38fasta --native-pair-hmm-threads 32 \
+		-I $sid.tumor.recal.bam \
+		-I $sid.PBMC.recal.bam \
+		-L Agilent.SureSelectXT.Human.All.Exon.V4+UTRs.bed \
+		-normal $sid.PBMC \
+		--genotype-germline-sites \
+		--min-base-quality-score 20 \
+		--read-filter MappingQualityReadFilter \
+		--minimum-mapping-quality 20 \
+		--dont-use-soft-clipped-bases \
+		-O $sid.tumor.vcf.gz
+gatk SelectVariants -V $sid.PBMC.vcf.gz  -select-type SNP -O $sid.PBMC.SNP.vcf.gz
+
+gatk Mutect2 -R $hg38fasta --native-pair-hmm-threads 32 \
+		-I $sid.tumor.recal.bam \
+		-I $sid.PBMC.recal.bam \
+		-L Agilent.SureSelectXT.Human.All.Exon.V4+UTRs.bed \
+		-normal $sid.tumor \
+		--genotype-germline-sites \
+		--min-base-quality-score 20 \
+		--read-filter MappingQualityReadFilter \
+		--minimum-mapping-quality 20 \
+		--dont-use-soft-clipped-bases \
+		-O $sid.PBMC.vcf.gz
+gatk SelectVariants -V $sid.tumor.vcf.gz -select-type SNP -O $sid.tumor.SNP.vcf.gz
+
+## filter variants, PBMC-specific variants are considered CH-derived
+## the processed files in vcf format are under Processed.files/6.Exome-seq/ directory.
+perl 1.variant/filt_paired_pbmc.pl  $sid.PBMC.vcf.gz  | bgzip > $sid.PBMC.filter.vcf.gz
+perl 1.variant/filt_paired_tumor.pl $sid.tumor.vcf.gz | bgzip > $sid.tumor.filter.vcf.gz
+perl 1.variant/filt_paired_vcf.pl $sid.PBMC.filter.vcf.gz $sid.tumor.filter.vcf.gz | bgzip > $sid.CH.vcf.gz
+perl 1.variant/filt_paired_vcf.pl $sid.tumor.filter.vcf.gz $sid.PBMC.filter.vcf.gz | bgzip > $sid.tumor.vcf.gz
+## the processed files in vcf format are under Processed.files/6.CH.vs.Tumor/ directory.
+```
+
+## 3. Identification of CH-dervied variants in high-depth PBMC data
+```
+## here we use the sample Ctrl_1 as an example
+## You need to uncompress the SRA file use fasterq-dump to get fastq files
+sid=Ctrl_1
+PBMC_1=SRR10799887_1.fastq
+PBMC_2=SRR10799887_2.fastq
+
+## extract and remove UMIs in this data, using the processed FASTQ files for read alignment
+perl 4.target-seq/process.UMI.pl $PBMC_1 $PBMC_2 $sid.PBMC
+
+## preprocessing, read alignment, and remove duplicates, same as Step 1
+## and assumes that you get the file $sid.PBMC.mkdup.bam
+## call variants using GATK, the annotation files for GATK are required
+## Need to update the path to hg38 genome file (FASTA format) 
+hg38fasta=/path/to/hg38.fa
+
+gatk BaseRecalibrator -R $hg38fasta -I $sid.PBMC.mkdup.bam -O $sid.PBMC.recal.table \
+	--known-sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
+	--known-sites 1000G_phase1.snps.high_confidence.hg38.vcf.gz \
+	--known-sites dbsnp_156.vcf.gz
+
+gatk ApplyBQSR -R $hg38fasta -I $sid.PBMC.mkdup.bam -O $sid.PBMC.recal.bam \
+	-bqsr-recal-file $sid.PBMC.recal.table
+
+gatk HaplotypeCaller -R $hg38fasta -I $sid.PBMC.recal.bam -O $sid.PBMC.vcf.gz \
+	-ERC GVCF --dont-use-soft-clipped-bases true --min-base-quality-score 20 \
+	--read-filter MappingQualityReadFilter --minimum-mapping-quality 20
+
+gatk GenotypeGVCFs -R $hg38fasta -V $sid.PBMC.vcf.gz \
+	-D dbsnp_156.vcf.gz -O $sid.PBMC.HC.vcf.gz
+
+gatk SelectVariants -V $sid.PBMC.HC.vcf.gz -select-type SNP -O $sid.PBMC.SNP.vcf.gz
+
+## filter variants
+## the processed files in vcf format are under Processed.files/5.Target-seq/ directory.
+perl 4.target-seq/filt_vcf_pbmc.pl $sid.PBMC.SNP.vcf.gz $sid.CH.vcf.gz
+```
+
+## 4. Call and filter variants in low-pass cfDNA data
+```
+#### For plain DNA-seq data:
+## Need to update the path to hg38 genome file (FASTA format)
+hg38fasta=/path/to/hg38.fa
+samtools view -@ 4 -h $sid.mkdup.bam | perl -alne 'print and next if /^@/; next if $F[1] & 0x100 || $F[2] eq "*"; print if ($F[1] & 0x02) && ($F[6] eq "=")' | samtools view -b -@ 16 -o $sid.filter.bam
+samtools index -@ 16 $sid.filter.bam
+bcftools mpileup -q 60 -Q 30 -Ov -f $hg38fasta --threads 16 $sid.filter.bam | bcftools call -vc -V indels -Oz --threads 16 -o $sid.vcf.gz
+zcat $sid.vcf.gz | perl -alne 'print and next if /^#/; print if $F[0]=~/^chr\d+$/ && $F[5] >= 30 && $F[4] !~ /,/' | gzip > $sid.hdfilt.pass.snp.raw.vcf.gz
+zcat $sid.hdfilt.pass.snp.raw.vcf.gz | perl -alne 'next if /^#/; print "$F[0]\t$F[1]"' | perl 1.variant/get_dmbs_pos.pl - | uniq > $sid.dmbs.txt
+perl 1.variant/filt_vcf_dmbs.pl $sid.hdfilt.pass.snp.raw.vcf.gz $sid.dmbs.txt $sid.hdfilt.pass.snp.tmp.vcf.gz
+
+## the hg38.non.blacklist.bed records the genomic regions that are NOT in ENCODE's blacklist
+bcftools view $sid.hdfilt.pass.snp.tmp.vcf.gz -R 1.variant/hg38.non.blacklist.bed | gzip > $sid.hdfilt.pass.snp.tmp1.vcf.gz
+perl 1.variant/sub_dp.pl $sid.hdfilt.pass.snp.tmp1.vcf.gz $sample.hdfilt.pass.snp.tmp2.vcf.gz
+
+## the "hg38_cosmic99.filt.gz" and "known_snp.gz" files could be found in "Processed.files"
+perl 1.variant/filt_vcf_snp.pl $sid.hdfilt.pass.snp.tmp2.vcf.gz Processed.files/hg38_cosmic99.filt.gz Processed.files/known_snp.gz $sid.final.vcf.gz
+
+#### For EM-seq data
 samtools view -@ 4 -h Msuite2.$sid/Msuite2.final.bam | perl -alne 'print and next if /^@/; next if $F[1] & 0x100 || $F[2] eq "*"; print if ($F[1] & 0x02) && ($F[6] eq "=") && /XG:Z:CT/' | samtools view -@ 8 -b -o $sid.ct.bam &
 samtools view -@ 4 -h Msuite2.$sid/Msuite2.final.bam | perl -alne 'print and next if /^@/; next if $F[1] & 0x100 || $F[2] eq "*"; print if ($F[1] & 0x02) && ($F[6] eq "=") && /XG:Z:GA/' | samtools view -@ 8 -b -o $sid.ga.bam &
 wait
@@ -88,21 +194,6 @@ wait
 bcftools merge --threads 16 $sid.c.filter.vcf.gz $sid.g.filter.vcf.gz -Oz -o $sid.vcf.gz
 ```
 
-The following commands were used to filter variants:
-```
-## filter variants
-zcat $sid.vcf.gz | perl -alne 'print and next if /^#/; print if $F[0]=~/^chr\d+$/ && $F[5] >= 30 && $F[4] !~ /,/' | gzip > $sid.hdfilt.pass.snp.raw.vcf.gz
-zcat $sid.hdfilt.pass.snp.raw.vcf.gz | perl -alne 'next if /^#/; print "$F[0]\t$F[1]"' | perl 1.variant/get_dmbs_pos.pl - | uniq > $sid.dmbs.txt
-perl 1.variant/filt_vcf_dmbs.pl $sid.hdfilt.pass.snp.raw.vcf.gz $sid.dmbs.txt $sid.hdfilt.pass.snp.tmp.vcf.gz
-
-## the hg38.non.blacklist.bed records the genomic regions that are NOT in ENCODE's blacklist
-bcftools view $sid.hdfilt.pass.snp.tmp.vcf.gz -R 1.variant/hg38.non.blacklist.bed | gzip > $sid.hdfilt.pass.snp.tmp1.vcf.gz
-perl 1.variant/sub_dp.pl $sid.hdfilt.pass.snp.tmp1.vcf.gz $sample.hdfilt.pass.snp.tmp2.vcf.gz
-
-## the "hg38_cosmic99.filt.gz" and "known_snp.gz" files could be found in "Processed.files"
-perl 1.variant/filt_vcf_snp.pl $sid.hdfilt.pass.snp.tmp2.vcf.gz Processed.files/hg38_cosmic99.filt.gz Processed.files/known_snp.gz $sid.final.vcf.gz
-```
-
 For each dataset, after obtaining the somatic variants for all samples, the following commands were used to generate mutation profiles:
 ```
 ## prepare a "vcf.info" file, which contains 3 columns: sampleID category /path/to/final.vcf.gz
@@ -118,32 +209,7 @@ Rscript 1.variant/pca.R 1.variant/$cohortID.96_mutation_profile.txt 1.variant/$c
 Rscript 1.variant/cluster.R 1.variant/$cohortID.96_mutation_profile.txt 1.variant/$cohortID.vcf.info $cohortID
 ```
 
-## 2. Signature deconvolution
-For each dataset, we randomly selected 8-10 control samples as "background signatures", and pooled them with COSMIC SBS signatures to deconvolute the rest samples:
-```
-## COSMIC SBS signatures are downloaded from https://cancer.sanger.ac.uk/signatures/downloads/.
-## Note that known sequencing artefacts are NOT used in our analysis.
-
-## The following controls were used as background (recorded in "control_background.txt" files):
-## HCC cohort: A67 A46 A60 A74 A96 A77 A97 A89
-## Liang cohort: all controls
-## Bie cohort: HRR1235773 HRR1235415 HRR1235501 HRR1235571 HRR1235605 HRR1235344 HRR1235464 HRR1235646 HRR1235603 HRR1235527
-
-## The following are commands for analyzing HCC cohort
-cohortID=HCC
-cut -f 2- 1.variant/$cohortID.control_background.txt | paste 1.variant/COSMIC_signature.txt - > 1.variant/$cohortID.signature.txt
-perl 1.variant/select.pl 1.variant/$cohortID.96_mutation_profile.txt 1.variant/$cohortID.control_background.txt 1.variant/$cohortID.96_mutation_profile_final.txt
-Rscript 1.variant/deconvolution.R 1.variant/$cohortID.96_mutation_profile_final.txt 1.variant/$cohortID.signature.txt 1.variant/$cohortID
-
-## plot per sample
-Rscript 1.variant/Fraction_of_COSMIC_box.R 1.variant/$cohortID.All_SBS_contribution.txt 1.variant/$cohortID.Fraction_of_COSMIC.pdf
-
-## plot per SBS
-awk '{for(i=1;i<=NF;i++)a[i]=a[i]?a[i]"\t"$i:$i}END{for(i=1;i<=NF;i++)print a[i]}' 1.variant/$cohortID.COSMIC_SBS_contribution.txt | perl -alne 'print if $F[0] !~ /Ctr/'> 1.variant/$cohortID.tumor_sbs.plot.txt
-Rscript 1.variant/SBS_contribution_plot.R 1.variant/$cohortID.tumor_sbs.plot.txt SBS_contribution 1.variant/$cohortID.SBS_contribution.pdf
-```
-
-## 3. Extract Wt- and Mut-DNA
+## 5. Extract Wt- and Mut-DNA
 For each sample, we used the following commands to extract Wt- and Mut- DNA in BED format (which files are provided in "Processed.files").
 ```
 zcat $sid.final.vcf.gz | perl -alne 'next if /^#/; print join "\t", $F[0], $F[1], $F[3], $F[4], $F[2]' > $sid.txt
@@ -171,7 +237,7 @@ perl 2.fragmentomics_epigenetics/1.extract_fragments/select.pl $sid.sequenced.al
 sort -k1,1V -k2,2n $sid.sequenced.alleles | perl 2.fragmentomics_epigenetics/1.extract_fragments/extract.bed.pl - $sid
 ```
 
-## 4. CfDNA fragmentomic features in Wt- and Mut-DNA
+## 6. CfDNA fragmentomic features in Wt- and Mut-DNA
 After extracting Wt- and Mut-DNA, we used the following commands to analyze cfDNA fragmentomic features for each sample:
 ```
 ## All processed Wt- and Mut-DNA files are under "Processed.files"
@@ -278,7 +344,7 @@ perl 2.fragmentomics_epigenetics/6.methylation/extract_snp.pl $sid.sequenced.all
 
 ## extract Wt- and Mut-DNA reads for extracted variants
 perl 2.fragmentomics_epigenetics/6.methylation/extract_fragment_id.pl $sid.sequenced.alleles $sid.common.snv $sid
-perl 2.fragmentomics_epigenetics/6.methylation/extract_reads.pl $FASTQ1 $FASTQ2 $sid.wt &
+perl 2.fragmentomics_epigenetics/6.methylation/extract_reads.pl $FASTQ1 $FASTQ2 $sid.wt  &
 perl 2.fragmentomics_epigenetics/6.methylation/extract_reads.pl $FASTQ1 $FASTQ2 $sid.mut &
 wait
 
@@ -312,7 +378,32 @@ Rscript 2.fragmentomics_epigenetics/6.methylation/box_methy.R 2.fragmentomics_ep
 Rscript 2.fragmentomics_epigenetics/6.methylation/roc_methy.R 2.fragmentomics_epigenetics/6.methylation/$region.Diff_methylation $region 2.fragmentomics_epigenetics/6.methylation/$region
 ```
 
-## 5. FreeSV and FreeSV-m models
+## 7. Signature deconvolution
+For each dataset, we randomly selected 8-10 control samples as "background signatures", and pooled them with COSMIC SBS signatures to deconvolute the rest samples:
+```
+## COSMIC SBS signatures are downloaded from https://cancer.sanger.ac.uk/signatures/downloads/.
+## Note that known sequencing artefacts are NOT used in our analysis.
+
+## The following controls were used as background (recorded in "control_background.txt" files):
+## HCC cohort: A67 A46 A60 A74 A96 A77 A97 A89
+## Liang cohort: all controls
+## Bie cohort: HRR1235773 HRR1235415 HRR1235501 HRR1235571 HRR1235605 HRR1235344 HRR1235464 HRR1235646 HRR1235603 HRR1235527
+
+## The following are commands for analyzing HCC cohort
+cohortID=HCC
+cut -f 2- 1.variant/$cohortID.control_background.txt | paste 1.variant/COSMIC_signature.txt - > 1.variant/$cohortID.signature.txt
+perl 1.variant/select.pl 1.variant/$cohortID.96_mutation_profile.txt 1.variant/$cohortID.control_background.txt 1.variant/$cohortID.96_mutation_profile_final.txt
+Rscript 1.variant/deconvolution.R 1.variant/$cohortID.96_mutation_profile_final.txt 1.variant/$cohortID.signature.txt 1.variant/$cohortID
+
+## plot per sample
+Rscript 1.variant/Fraction_of_COSMIC_box.R 1.variant/$cohortID.All_SBS_contribution.txt 1.variant/$cohortID.Fraction_of_COSMIC.pdf
+
+## plot per SBS
+awk '{for(i=1;i<=NF;i++)a[i]=a[i]?a[i]"\t"$i:$i}END{for(i=1;i<=NF;i++)print a[i]}' 1.variant/$cohortID.COSMIC_SBS_contribution.txt | perl -alne 'print if $F[0] !~ /Ctr/'> 1.variant/$cohortID.tumor_sbs.plot.txt
+Rscript 1.variant/SBS_contribution_plot.R 1.variant/$cohortID.tumor_sbs.plot.txt SBS_contribution 1.variant/$cohortID.SBS_contribution.pdf
+```
+
+## 8. FreeSV and FreeSV-m models
 FreeSV model was built through integrating genomic, fragmentomic, and epigenetic features associated with somatic variants in Bie et al. cohort. We pooled the individual features calculated by above commands, and sorted them in "3.AI_model/FreeSV_data.txt" file. We used the following commands to build and evaluate the model:
 ```
 ## build model
@@ -349,7 +440,7 @@ Rscript 3.AI_model/box.R 3.AI_model/FreeSV-m_test.pred.txt Test_pred 3.AI_model/
 Rscript 3.AI_model/box_stage.R 3.AI_model/FreeSV-m_test.pred.txt Test_pred_stage 3.AI_model/FreeSV-m_test_pred_stage.pdf
 ```
 
-## 6. Murine cfDNA data
+## 9. Murine cfDNA data
 We identified the somatic variants, and analyzed the cfDNA size and end motif usages associated with Wt- and Mut-DNA using the following commands:
 ```
 ## Need to update sampleID and path to the FASTQ files
@@ -409,55 +500,4 @@ echo -e "$sid\t$ccca_n\t$ccca_t" | perl -alne 'print join "\t", $F[0], $F[1], $F
 ctcc_n=$(grep -w "^CTCC" $sid.Wt.motif  | cut -f 3)
 ctcc_t=$(grep -w "^CTCC" $sid.Mut.motif | cut -f 3)
 echo -e "$sid\t$ctcc_n\t$ctcc_t" | perl -alne 'print join "\t", $F[0], $F[1], $F[2], $F[2]-$F[1]' > $sid.motif.ctcc
-```
-
-## 7. Call variants in high-depth white blood cell data
-We identified variants from white blood cell data, and extracted those minor alleles with 2-30% frequencies (i.e., significantly lower than 50% in germline SNPs) as arised from clonal hamatopoiesis:
-```
-## here we use the sample Ctrl_1 as an example
-## You need to uncompress the SRA file use fasterq-dump to get fastq files
-sid=Ctrl_1
-buffycoat_1=SRR10799887_1.fastq
-buffycoat_2=SRR10799887_2.fastq
-
-## extract and remove UMIs in this data
-perl 4.target-seq/process.UMI.pl $buffycoat_1 $buffycoat_2 $sid.buffycoat
-
-## preprocessing, read alignment, and remove duplicates in buffycoat data, same as Step 1
-## Need to build hg38 index for BWA first and replace the following path
-hg38index=/path/to/hg38.bwa.index
-FASTQ1=$sid.buffycoat.R1.fq
-FASTQ2=$sid.buffycoat.R2.fq
-
-ktrim -1 $FASTQ1 -2 $FASTQ2 -t 8 -o $sid.buffycoat.ktrim -k illumina
-bwa mem -t 16 -M -Y $hg38index $sid.buffycoat.ktrim.read1.fq $sid.buffycoat.ktrim.read2.fq | samtools view -b -@ 16 - | samtools sort -@ 16 -o $sid.buffycoat.sort.bam - 2> $sid.buffycoat.bwa.log
-java -Xmx16g -XX:ParallelGCThreads=16 -jar picard.jar MarkDuplicates REMOVE_DUPLICATES=true I=$sid.buffycoat.sort.bam O=$sid.buffycoat.mkdup.bam METRICS_FILE=$sid.buffycoat.mkdup.bam.mat TMP_DIR=tmp 2> $sid.buffycoat.mkdup.log
-
-## call variants using GATK, the annotation files for GATK are required
-## Need to update the path to hg38 genome file (FASTA format) 
-hg38fasta=/path/to/hg38.fa
-
-gatk BaseRecalibrator -R $hg38fasta -I $sid.buffycoat.mkdup.bam -O $sid.buffycoat.recal.table \
-	--known-sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
-	--known-sites 1000G_phase1.snps.high_confidence.hg38.vcf.gz \
-	--known-sites dbsnp_156.vcf.gz
-
-gatk ApplyBQSR -R $hg38fasta -I $sid.buffycoat.mkdup.bam -O $sid.buffycoat.recal.bam \
-	-bqsr-recal-file $sid.buffycoat.recal.table
-
-gatk HaplotypeCaller -R $hg38fasta -I $sid.buffycoat.recal.bam -O $sid.buffycoat.vcf.gz \
-	-ERC GVCF --dont-use-soft-clipped-bases true --min-base-quality-score 20 \
-	--read-filter MappingQualityReadFilter --minimum-mapping-quality 20
-
-gatk GenotypeGVCFs -R $hg38fasta -V $sid.buffycoat.vcf.gz \
-	-D dbsnp_156.vcf.gz -O $sid.buffycoat.HC.vcf.gz
-
-gatk SelectVariants -V $sid.buffycoat.HC.vcf.gz -select-type SNP -O $sid.buffycoat.SNP.vcf.gz
-
-## filter variants, keep those with minor alleles ranging between 2% and 30%
-## the processed files in vcf format are under Processed.files/5.Target-seq/ directory.
-perl 4.target-seq/filt_vcf_buffycoat.pl $sid.buffycoat.SNP.vcf.gz $sid.CH.vcf.gz
-
-## extract cfDNA covering variants and calculate fragmentomics are the same as Step 3-4
-## Reads covering major alleles are "Wt-DNA" while reads covering minor alleles are "Mut-DNA"
 ```
