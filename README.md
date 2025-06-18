@@ -25,8 +25,8 @@ We had deposited processed data (including variants, cfDNA reads, and large anno
 ```
 wget -O fragmentomics.of.variants.in.cfDNA.tar "https://zenodo.org/records/14849892/files/fragmentomics.of.variants.in.cfDNA.tar?download=1"
 tar xf fragmentomics.of.variants.in.cfDNA.tar
-wget -O suppl.tar "https://zenodo.org/records/XXXXXXXXXX/files/suppl.CH.tar?download=1"
-tar xf suppl.CH.tar
+wget -O CH.tar https://zenodo.org/records/15686549/files/CH.tar.gz?download=1
+tar zxf CH.tar.gz
 ## you will see a newly created directory named "Processed.files" with all files stored inside.
 ```
 
@@ -85,7 +85,6 @@ gatk ApplyBQSR -R $hg38fasta -I $sid.tumor.mkdup.bam -O $sid.tumor.recal.bam \
 gatk Mutect2 -R $hg38fasta --native-pair-hmm-threads 32 \
 		-I $sid.tumor.recal.bam \
 		-I $sid.PBMC.recal.bam \
-		-L Agilent.SureSelectXT.Human.All.Exon.V4+UTRs.bed \
 		-normal $sid.PBMC \
 		--genotype-germline-sites \
 		--min-base-quality-score 20 \
@@ -93,12 +92,11 @@ gatk Mutect2 -R $hg38fasta --native-pair-hmm-threads 32 \
 		--minimum-mapping-quality 20 \
 		--dont-use-soft-clipped-bases \
 		-O $sid.tumor.vcf.gz
-gatk SelectVariants -V $sid.PBMC.vcf.gz  -select-type SNP -O $sid.PBMC.SNP.vcf.gz
+gatk SelectVariants -V $sid.tumor.vcf.gz -select-type SNP -O $sid.tumor.SNP.vcf.gz
 
 gatk Mutect2 -R $hg38fasta --native-pair-hmm-threads 32 \
 		-I $sid.tumor.recal.bam \
 		-I $sid.PBMC.recal.bam \
-		-L Agilent.SureSelectXT.Human.All.Exon.V4+UTRs.bed \
 		-normal $sid.tumor \
 		--genotype-germline-sites \
 		--min-base-quality-score 20 \
@@ -106,7 +104,7 @@ gatk Mutect2 -R $hg38fasta --native-pair-hmm-threads 32 \
 		--minimum-mapping-quality 20 \
 		--dont-use-soft-clipped-bases \
 		-O $sid.PBMC.vcf.gz
-gatk SelectVariants -V $sid.tumor.vcf.gz -select-type SNP -O $sid.tumor.SNP.vcf.gz
+gatk SelectVariants -V $sid.PBMC.vcf.gz  -select-type SNP -O $sid.PBMC.SNP.vcf.gz
 
 ## filter variants, PBMC-specific variants are considered CH-derived
 ## the processed files in vcf format are under Processed.files/6.Exome-seq/ directory.
