@@ -401,7 +401,7 @@ awk '{for(i=1;i<=NF;i++)a[i]=a[i]?a[i]"\t"$i:$i}END{for(i=1;i<=NF;i++)print a[i]
 Rscript 1.variant/SBS_contribution_plot.R 1.variant/$cohortID.tumor_sbs.plot.txt SBS_contribution 1.variant/$cohortID.SBS_contribution.pdf
 ```
 
-## 8. FreeSV and FreeSV-m models
+## 8. FreeSV and FreeSV+ models
 FreeSV model was built through integrating genomic, fragmentomic, and epigenetic features associated with somatic variants in Bie et al. cohort. We pooled the individual features calculated by above commands, and sorted them in "3.AI_model/FreeSV_data.txt" file. We used the following commands to build and evaluate the model:
 ```
 ## build model
@@ -415,27 +415,27 @@ Rscript 3.AI_model/box.R 3.AI_model/FreeSV_test.pred.txt Test_pred 3.AI_model/Fr
 Rscript 3.AI_model/box_stage.R 3.AI_model/FreeSV_test.pred.txt Test_pred_stage 3.AI_model/FreeSV_pred_stage.pdf
 ```
 
-For FreeSV-m model, we pooled the features used in FreeSV and 4 genomewide features calculated in Bie et al. work. We then built the model using the "training" group and applied the model on "testing" group (both defined in Bie et al. study) to evaluate its performance. The feature matrices were recorded in "FreeSV-m_train_data.txt" and "3.AI_model/FreeSV-m_test_data.txt" files. We used the following commands to build and evaluate the model:
+For FreeSV+ model, we pooled the features used in FreeSV and 4 genomewide features calculated in Bie et al. work. We then built the model using the "training" group and applied the model on "testing" group (both defined in Bie et al. study) to evaluate its performance. The feature matrices were recorded in "FreeSV+_train_data.txt" and "3.AI_model/FreeSV+_test_data.txt" files. We used the following commands to build and evaluate the model:
 ```
 ## train model on training group
-Rscript 3.AI_model/GBM_parallel.R 3.AI_model/FreeSV-m_train_data.txt FreeSV-m_train
-perl 3.AI_model/mean_pred.pl FreeSV-m_train > FreeSV-m_train.pred.txt
+Rscript 3.AI_model/GBM_parallel.R 3.AI_model/FreeSV+_train_data.txt FreeSV+_train
+perl 3.AI_model/mean_pred.pl FreeSV+_train > FreeSV+_train.pred.txt
 
-## apply FreeSV-m model on testing group
-Rscript 3.AI_model/apply_model.R 3.AI_model/FreeSV-m_test_data.txt FreeSV-m_train 3.AI_model/FreeSV-m_test
-perl 3.AI_model/mean_pred.pl FreeSV-m_test > FreeSV-m_test.pred.txt
+## apply FreeSV+ model on testing group
+Rscript 3.AI_model/apply_model.R 3.AI_model/FreeSV+_test_data.txt FreeSV+_train 3.AI_model/FreeSV+_test
+perl 3.AI_model/mean_pred.pl FreeSV+_test > FreeSV+_test.pred.txt
 
 ## ROC on training group
-Rscript 3.AI_model/roc.R 3.AI_model/FreeSV-m_train.pred.txt Train 3.AI_model/FreeSV-m_train.roc.pdf
-Rscript 3.AI_model/roc_stage.R 3.AI_model/FreeSV-m_train.pred.txt Train_stage 3.AI_model/FreeSV-m_train_stage.roc.pdf
-Rscript 3.AI_model/box.R 3.AI_model/FreeSV-m_train.pred.txt Train_pred 3.AI_model/FreeSV-m_train_pred.pdf
-Rscript 3.AI_model/box_stage.R 3.AI_model/FreeSV-m_train.pred.txt Train_pred_stage 3.AI_model/FreeSV-m_train_pred_stage.pdf
+Rscript 3.AI_model/roc.R 3.AI_model/FreeSV+_train.pred.txt Train 3.AI_model/FreeSV+_train.roc.pdf
+Rscript 3.AI_model/roc_stage.R 3.AI_model/FreeSV+_train.pred.txt Train_stage 3.AI_model/FreeSV+_train_stage.roc.pdf
+Rscript 3.AI_model/box.R 3.AI_model/FreeSV+_train.pred.txt Train_pred 3.AI_model/FreeSV+_train_pred.pdf
+Rscript 3.AI_model/box_stage.R 3.AI_model/FreeSV+_train.pred.txt Train_pred_stage 3.AI_model/FreeSV+_train_pred_stage.pdf
 
 ## ROC on testing group
-Rscript 3.AI_model/roc.R 3.AI_model/FreeSV-m_test.pred.txt Test 3.AI_model/FreeSV-m_test.roc.pdf
-Rscript 3.AI_model/roc_stage.R 3.AI_model/FreeSV-m_test.pred.txt Test_stage 3.AI_model/FreeSV-m_test_stage.roc.pdf
-Rscript 3.AI_model/box.R 3.AI_model/FreeSV-m_test.pred.txt Test_pred 3.AI_model/FreeSV-m_test_pred.pdf
-Rscript 3.AI_model/box_stage.R 3.AI_model/FreeSV-m_test.pred.txt Test_pred_stage 3.AI_model/FreeSV-m_test_pred_stage.pdf
+Rscript 3.AI_model/roc.R 3.AI_model/FreeSV+_test.pred.txt Test 3.AI_model/FreeSV+_test.roc.pdf
+Rscript 3.AI_model/roc_stage.R 3.AI_model/FreeSV+_test.pred.txt Test_stage 3.AI_model/FreeSV+_test_stage.roc.pdf
+Rscript 3.AI_model/box.R 3.AI_model/FreeSV+_test.pred.txt Test_pred 3.AI_model/FreeSV+_test_pred.pdf
+Rscript 3.AI_model/box_stage.R 3.AI_model/FreeSV+_test.pred.txt Test_pred_stage 3.AI_model/FreeSV+_test_pred_stage.pdf
 ```
 
 ## 9. Murine cfDNA data
