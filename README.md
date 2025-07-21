@@ -23,8 +23,15 @@ cd cfDNA-epiSNV
 
 We had deposited processed data (including variants, cfDNA reads, and large annotation files) to [Zenodo](https://zenodo.org/records/14849892 "Zenodo data link"). You may download it and decompress the files at the same directory of this README file:
 ```
+## NOTE: the data is not public available unless the manuscript gets accepted for publication,
+## please download the data manually using the reviewer link provided in the manuscript
+
 wget -O fragmentomics.of.variants.in.cfDNA.tar "https://zenodo.org/records/14849892/files/fragmentomics.of.variants.in.cfDNA.tar?download=1"
 tar xf fragmentomics.of.variants.in.cfDNA.tar
+
+wget -O suppl.tar https://zenodo.org/records/15541329/files/suppl.tar?download=1
+tar zxf suppl.tar
+
 wget -O CH.tar https://zenodo.org/records/15686549/files/CH.tar.gz?download=1
 tar zxf CH.tar.gz
 ## you will see a newly created directory named "Processed.files" with all files stored inside.
