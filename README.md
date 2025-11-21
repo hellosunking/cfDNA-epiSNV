@@ -27,11 +27,11 @@ We had deposited key processed data (including variants, cfDNA reads, and large 
 wget -O fragmentomics.of.variants.in.cfDNA.tar "https://zenodo.org/records/14849892/files/fragmentomics.of.variants.in.cfDNA.tar?download=1"
 tar xf fragmentomics.of.variants.in.cfDNA.tar
 
-wget -O suppl.tar https://zenodo.org/records/15541329/files/suppl.tar?download=1
+wget -O suppl.tar "https://zenodo.org/records/15541329/files/suppl.tar?download=1"
 tar xf suppl.tar
 
-wget -O CH.tar https://zenodo.org/records/15686549/files/CH.tar.gz?download=1
-tar xf CH.tar.gz
+wget -O CH.vs.Tumor.tar "https://zenodo.org/records/17667788/files/CH.vs.Tumor.tar?download=1"
+tar xf CH.vs.Tumor.tar
 ## you will see a newly created directory named "Processed.files" with all files stored inside.
 ```
 
