@@ -1,4 +1,4 @@
-## Codes and scripts used in Zhang and An et al. manuscript
+## Codes and scripts used in Zhang and An et al. Advanced Science 2026 manuscript
 Distributed under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/ "CC BY-NC-ND") license and for **personal and academic usage only**.
 
 The following softwares are used:
@@ -22,7 +22,6 @@ cd cfDNA-epiSNV
 ```
 
 We had deposited key processed data (including variants, cfDNA reads, and large annotation files) to [Zenodo](https://zenodo.org/records/14849892 "Zenodo data link"). You may download it and decompress the files at the same directory of this README file:
-#### NOTE: the data is not public available until the manuscript gets accepted for publication, so please download the data manually using the reviewer link provided in the manuscript.
 ```
 wget -O fragmentomics.of.variants.in.cfDNA.tar "https://zenodo.org/records/14849892/files/fragmentomics.of.variants.in.cfDNA.tar?download=1"
 tar xf fragmentomics.of.variants.in.cfDNA.tar
@@ -504,3 +503,10 @@ ctcc_n=$(grep -w "^CTCC" $sid.Wt.motif  | cut -f 3)
 ctcc_t=$(grep -w "^CTCC" $sid.Mut.motif | cut -f 3)
 echo -e "$sid\t$ctcc_n\t$ctcc_t" | perl -alne 'print join "\t", $F[0], $F[1], $F[2], $F[2]-$F[1]' > $sid.motif.ctcc
 ```
+## Citation
+When referencing, please cite "Zhang Z, An Y, et al. **Cancer-like fragmentomic characteristics of somatic variants in cell-free DNA**
+*Adv Sci* 2026 in press."
+[PubMed](https://www.ncbi.nlm.nih.gov/pubmed/ "PubMed")
+[Full Text](https://doi.org/10.1002/advs.202514819 "Full text")
+
+
