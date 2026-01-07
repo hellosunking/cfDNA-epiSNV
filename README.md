@@ -1,4 +1,4 @@
-## Codes and scripts used in Zhang and An et al. Advanced Science 2026 manuscript
+## Codes/scripts for Zhang and An et al. Advanced Science 2026 paper
 Distributed under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/ "CC BY-NC-ND") license and for **personal and academic usage only**.
 
 The following softwares are used:
@@ -61,7 +61,7 @@ make clean
 cd ../
 ```
 
-## 2. Identification of CH- and tumor-derived somatic variants in paired PBMC and tumor genotyping data
+## 2. Identification of CH- and tumor-derived somatic variants in paired PBMC and tumor genotyping data (for validations)
 ```
 ## preprocess data, read alignment and BQSR are the same as Step 1
 sid=BRCA
@@ -119,7 +119,7 @@ perl 1.variant/filt_paired_vcf.pl $sid.tumor.filter.vcf.gz $sid.PBMC.filter.vcf.
 ## the processed files in vcf format are under Processed.files/6.CH.vs.Tumor/ directory.
 ```
 
-## 3. Identification of CH-dervied variants in high-depth PBMC data
+## 3. Identification of CH-dervied variants in high-depth PBMC data (for validations)
 ```
 ## here we use the sample Ctrl_1 as an example
 ## You need to uncompress the SRA file use fasterq-dump to get fastq files
