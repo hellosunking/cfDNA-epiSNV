@@ -505,8 +505,8 @@ echo -e "$sid\t$ctcc_n\t$ctcc_t" | perl -alne 'print join "\t", $F[0], $F[1], $F
 ```
 ## Citation
 When referencing, please cite "Zhang Z, An Y, et al. **Cancer-like fragmentomic characteristics of somatic variants in cell-free DNA**
-*Adv Sci* 2026 in press."
-[PubMed](https://www.ncbi.nlm.nih.gov/pubmed/ "PubMed")
-[Full Text](https://doi.org/10.1002/advs.202514819 "Full text")
+*Adv Sci* 2026 Jan 22; 13:e14819."
+[PubMed](https://www.ncbi.nlm.nih.gov/pubmed/41572489 "PubMed")
+[Full Text](https://advanced.onlinelibrary.wiley.com/doi/10.1002/advs.202514819 "Full text")
 
 
